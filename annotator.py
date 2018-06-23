@@ -135,13 +135,15 @@ class Window(QtGui.QDialog):
 	def GetCorner(self):
 		gray = cv2.cvtColor(self.img,cv2.COLOR_BGR2GRAY)
 		grayHarris = self.GetCornersHarris(gray)
-		print grayHarris
+		
 		grayHough = self.GetLinesHough(gray)
-		print grayHough
-
+		
+		grayConner = gray + grayHough
+		LocalMax = self.GetNonMaxSup(grayHough+grayHarris)
 		self.ax.clear()
-		# self.ax.imshow((grayHough+grayHarris)/2.0, cmap='gray', vmin = 0, vmax = 255)
-		self.ax.imshow(gray + grayHough, cmap='gray', vmin = 0, vmax = 255)
+		# self.ax.imshow((grayHough+grayHarris)/2.0 * LocalMax, cmap='gray', vmin = 0, vmax = 255)
+		# self.ax.imshow(grayConner, cmap='gray', vmin = 0, vmax = 255)
+		self.ax.imshow(gray + (grayHough+grayHarris)/2.0*LocalMax, cmap='gray', vmin = 0, vmax = 255)
 		self.ax.set_xlabel(file)
 		self.canvas.draw()
 		
@@ -159,7 +161,7 @@ class Window(QtGui.QDialog):
 	def GetLinesHough(self, gray):
 		ret = np.zeros(gray.shape)
 		edges = cv2.Canny(gray, 0, 200, apertureSize=3)
-		lines = cv2.HoughLines(edges,1,np.pi/720,150)
+		lines = cv2.HoughLines(edges,1,np.pi/720,130)
 
 		for line in lines:
 		    for rho,theta in line:
@@ -180,15 +182,19 @@ class Window(QtGui.QDialog):
 
 	def GetNonMaxSup(self, gray):
 		ret = np.zeros(gray.shape)
-		gray[:,:]
-		np.zeros(gray.shape)[:-1,-1] = gray[:-1,:-1]
-		np.pad(gray[:-1,:-1], ((1, 1), (0, 0)), 0)
-		np.pad(gray[:-1,:], ((1, 0), (0, 0)), 0)
-		np.pad(gray[:-1,1:], ((1, 0), (0, 1)), 0)
-		np.pad(gray[:,:-1], ((0, 1), (0, 0)), 0)
-		gray[:,:]
-		np.pad(gray[:,1:], ((0, 0), (0, 1)), 0)
 
+		lsShift = []
+		lsShift.append(np.pad(gray[:-1,:-1], ((1, 0), (1, 0)), 'constant'))
+		lsShift.append(np.pad(gray[:-1,:], ((1, 0), (0, 0)), 'constant'))
+		lsShift.append(np.pad(gray[:-1,1:], ((1, 0), (0, 1)), 'constant'))
+		lsShift.append(np.pad(gray[:,:-1], ((0, 0), (1, 0)), 'constant'))
+		lsShift.append(np.pad(gray[:,1:], ((0, 0), (0, 1)), 'constant'))
+		lsShift.append(np.pad(gray[1:,:-1], ((0, 1), (1, 0)), 'constant'))
+		lsShift.append(np.pad(gray[1:,:], ((0, 1), (0, 0)), 'constant'))
+		lsShift.append(np.pad(gray[1:,1:], ((0, 1), (0, 1)), 'constant'))
+		grayMax = np.array(lsShift).max(axis=0)
+
+		ret[np.where(gray >= grayMax)] = 1.0
 
 		return ret
 
