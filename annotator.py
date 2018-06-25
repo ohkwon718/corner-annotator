@@ -30,13 +30,13 @@ class Window(QtGui.QDialog):
 		self.canvas = FigureCanvas(self.figure)
 		self.toolbar = NavigationToolbar(self.canvas, self)
 
-		self.btnCorner = QtGui.QPushButton('Corner')
-		self.btnCorner.setFixedWidth(100)
-		self.btnCorner.clicked.connect(self.GetCorner)
-
 		self.btnClick = QtGui.QPushButton('Click')
 		self.btnClick.setFixedWidth(100)
 		self.btnClick.clicked.connect(self.click)
+
+		self.btnRawImg = QtGui.QPushButton('Raw Image')
+		self.btnRawImg.setFixedWidth(100)
+		self.btnRawImg.clicked.connect(self.plotRawImg)
 
 		# self.btnGenerate = QtGui.QPushButton('Generate')
 		# self.btnGenerate.clicked.connect(self.generate)
@@ -49,13 +49,13 @@ class Window(QtGui.QDialog):
 		# self.listFile.installEventFilter(self)
 		# self.listFile.setFixedWidth(100)
 
-		self.cbGray = QtGui.QCheckBox("Gray")
+		self.cbGray = QtGui.QCheckBox("Gray Image")
 		self.cbGray.stateChanged.connect(lambda:self.evCheckBox(self.cbGray))
 
 		self.slGray = QtGui.QSlider(Qt.Horizontal)
 		self.slGray.setMinimum(0)
 		self.slGray.setMaximum(10)
-		self.slGray.setValue(0)
+		self.slGray.setValue(5)
 		self.slGray.setTickPosition(QtGui.QSlider.TicksBelow)
 		self.slGray.setTickInterval(1)
 		self.slGray.setFixedWidth(100)
@@ -67,7 +67,7 @@ class Window(QtGui.QDialog):
 		self.slHarris = QtGui.QSlider(Qt.Horizontal)
 		self.slHarris.setMinimum(0)
 		self.slHarris.setMaximum(10)
-		self.slHarris.setValue(0)
+		self.slHarris.setValue(5)
 		self.slHarris.setTickPosition(QtGui.QSlider.TicksBelow)
 		self.slHarris.setTickInterval(1)
 		self.slHarris.setFixedWidth(100)
@@ -79,25 +79,29 @@ class Window(QtGui.QDialog):
 		self.slHough = QtGui.QSlider(Qt.Horizontal)
 		self.slHough.setMinimum(0)
 		self.slHough.setMaximum(10)
-		self.slHough.setValue(0)
+		self.slHough.setValue(5)
 		self.slHough.setTickPosition(QtGui.QSlider.TicksBelow)
 		self.slHough.setTickInterval(1)
 		self.slHough.setFixedWidth(100)
 		self.slHough.valueChanged.connect(lambda:self.evSlider(self.slHough))
 
+		self.cbNonMaxSup = QtGui.QCheckBox("Non-Max-Sup")
+		self.cbNonMaxSup.stateChanged.connect(lambda:self.evCheckBox(self.cbNonMaxSup))
+
 		layoutControl = QtGui.QGridLayout()
-		layoutControl.addWidget(self.cbGray,0,0,1,1)
-		layoutControl.addWidget(self.slGray,1,0,1,1)
-		layoutControl.addWidget(self.cbHarris,2,0,1,1)
-		layoutControl.addWidget(self.slHarris,3,0,1,1)
-		layoutControl.addWidget(self.cbHough,4,0,1,1)
-		layoutControl.addWidget(self.slHough,5,0,1,1)
+		layoutControl.addWidget(self.btnRawImg,0,0,1,1)
+		layoutControl.addWidget(self.cbGray,1,0,1,1)
+		layoutControl.addWidget(self.slGray,2,0,1,1)
+		layoutControl.addWidget(self.cbHarris,3,0,1,1)
+		layoutControl.addWidget(self.slHarris,4,0,1,1)
+		layoutControl.addWidget(self.cbHough,5,0,1,1)
+		layoutControl.addWidget(self.slHough,6,0,1,1)
+		layoutControl.addWidget(self.cbNonMaxSup,7,0,1,1)
 
 		layout = QtGui.QGridLayout()
 		layout.addWidget(self.toolbar,0,0,1,4)
 		layout.addWidget(self.canvas,1,1,4,3)
-		layout.addWidget(self.btnCorner,1,0,1,1)
-		layout.addLayout(layoutControl,2,0,1,1)
+		layout.addLayout(layoutControl,1,0,1,1)
 		
 
 		self.setLayout(layout)
@@ -112,13 +116,7 @@ class Window(QtGui.QDialog):
 
 		self.testInit()
 
-	def evCheckBox(self, cb):
-		if cb.text() == "Gray":
-			self.bGray = cb.isChecked()
-		if cb.text() == "Harris":
-			self.bHarris = cb.isChecked()
-		if cb.text() == "Hough Line":
-			self.bHough = cb.isChecked()		
+	def evCheckBox(self, cb):	
 		self.getFusedImg()
 	
 	def evSlider(self, sl):
@@ -128,16 +126,18 @@ class Window(QtGui.QDialog):
 	def getFusedImg(self):
 		ret = np.zeros(self.gray.shape)
 		
-		if self.bGray:
-			ret = ret + float(self.slGray.value())/10 * self.gray
-
-		if self.bHarris:
+		if self.cbHarris.isChecked():
 			ret = ret + float(self.slHarris.value())/10 * self.imgHarris
 
-		if self.bHough:
+		if self.cbHough.isChecked():
 			ret = ret + float(self.slHough.value())/10 * self.imgHough
 
-		
+		if self.cbNonMaxSup.isChecked():
+			ret = self.GetNonMaxSup(ret)
+
+		if self.cbGray.isChecked():
+			ret = ret + float(self.slGray.value())/10 * self.gray
+
 		xlim = self.ax.get_xlim()
 		ylim = self.ax.get_ylim()
 		self.ax.clear()
@@ -196,24 +196,12 @@ class Window(QtGui.QDialog):
 		self.ax.set_xlabel(file)
 		self.canvas.draw()
 
-
-
-	def GetCorner(self):
-		gray = cv2.cvtColor(self.img,cv2.COLOR_BGR2GRAY)
-		grayHarris = self.GetCornersHarris(gray)
-		
-		grayHough = self.GetLinesHough(gray)
-		
-		grayConner = gray + grayHough
-		LocalMax = self.GetNonMaxSup(grayHough+grayHarris)
+	def plotRawImg(self):
 		self.ax.clear()
-		# self.ax.imshow((grayHough+grayHarris)/2.0 * LocalMax, cmap='gray', vmin = 0, vmax = 255)
-		# self.ax.imshow(grayConner, cmap='gray', vmin = 0, vmax = 255)
-		self.ax.imshow(gray + (grayHough+grayHarris)/2.0*LocalMax, cmap='gray', vmin = 0, vmax = 255)
+		self.ax.imshow(self.img)
 		self.ax.set_xlabel(file)
 		self.canvas.draw()
-		
-		pass
+
 
 	def GetCornersHarris(self, gray):
 		ret = np.zeros(gray.shape)
@@ -222,6 +210,11 @@ class Window(QtGui.QDialog):
 		dst = cv2.dilate(dst,None)
 		# ret[dst>0.01*dst.max()] = 1
 		ret[dst>0.001*dst.max()] = 255.0
+
+		# sobelx = cv2.Sobel(gray,cv2.CV_64F,1,0,ksize=5)
+		# sobely = cv2.Sobel(gray,cv2.CV_64F,0,1,ksize=5)
+		# return sobelx + sobely
+		
 		return ret
 
 	def GetLinesHough(self, gray):
@@ -247,7 +240,8 @@ class Window(QtGui.QDialog):
 
 
 	def GetNonMaxSup(self, gray):
-		ret = np.zeros(gray.shape)
+		# ret = np.zeros(gray.shape)
+		ret = gray
 
 		lsShift = []
 		lsShift.append(np.pad(gray[:-1,:-1], ((1, 0), (1, 0)), 'constant'))
@@ -260,7 +254,7 @@ class Window(QtGui.QDialog):
 		lsShift.append(np.pad(gray[1:,1:], ((0, 1), (0, 1)), 'constant'))
 		grayMax = np.array(lsShift).max(axis=0)
 
-		ret[np.where(gray >= grayMax)] = 1.0
+		ret[np.where(gray < grayMax)] = 0
 
 		return ret
 
@@ -297,6 +291,7 @@ class Window(QtGui.QDialog):
 				self.gray = cv2.cvtColor(self.img,cv2.COLOR_BGR2GRAY)
 				self.imgHarris = self.GetCornersHarris(self.gray)
 				self.imgHough = self.GetLinesHough(self.gray)
+				
 
 		self.ax.clear()
 		self.ax.imshow(self.img)
