@@ -34,15 +34,15 @@ class Window(QtGui.QDialog):
 		self.btnRawImg.setFixedWidth(100)
 		self.btnRawImg.clicked.connect(self.plotRawImg)
 
+		self.listPoint = QtGui.QListWidget()
+		self.listPoint.installEventFilter(self)
+		self.listPoint.setFixedWidth(100)
+
 		self.edt = QtGui.QPlainTextEdit()
 		self.edt.setDisabled(True)
 		self.edt.setMaximumBlockCount(10)
 		self.edt.setFixedWidth(100)
 		
-		# self.listFile = QtGui.QListWidget()
-		# self.listFile.installEventFilter(self)
-		# self.listFile.setFixedWidth(100)
-
 		self.cbGray = QtGui.QCheckBox("Gray Image")
 		self.cbGray.stateChanged.connect(lambda:self.evCheckBox(self.cbGray))
 
@@ -89,9 +89,12 @@ class Window(QtGui.QDialog):
 		self.cbAutoCorrection = QtGui.QCheckBox("Auto Correction")
 		self.cbAutoCorrection.stateChanged.connect(lambda:self.evCheckBox(self.cbAutoCorrection))
 
+		self.btnInsertNone = QtGui.QPushButton('Insert None')
+		self.btnInsertNone.setFixedWidth(100)
+		self.btnInsertNone.clicked.connect(self.insertNone)
 
-		# self.btnGenerate = QtGui.QPushButton('Generate')
-		# self.btnGenerate.clicked.connect(self.generate)
+		self.btnGenerate = QtGui.QPushButton('Generate')
+		self.btnGenerate.clicked.connect(self.generate)
 
 
 		layoutControl = QtGui.QGridLayout()
@@ -105,12 +108,15 @@ class Window(QtGui.QDialog):
 		layoutControl.addWidget(self.cbNonMaxSup,7,0,1,1)
 		layoutControl.addWidget(self.btnClick,8,0,1,1)
 		layoutControl.addWidget(self.cbAutoCorrection,9,0,1,1)
+		layoutControl.addWidget(self.btnInsertNone,10,0,1,1)
 
 		layout = QtGui.QGridLayout()
 		layout.addWidget(self.toolbar,0,0,1,4)
 		layout.addWidget(self.canvas,1,1,4,3)
 		layout.addLayout(layoutControl,1,0,1,1)
-		layout.addWidget(self.edt,2,0,1,1)
+		layout.addWidget(self.listPoint,2,0,1,1)
+		layout.addWidget(self.edt,3,0,1,1)
+		layout.addWidget(self.btnGenerate,4,0,1,1)
 
 		self.setLayout(layout)
 		self.ax = self.figure.add_subplot(111)
@@ -122,18 +128,19 @@ class Window(QtGui.QDialog):
 		self.imgHarris = False
 		self.imgHough = False
 
-		self.testInit()
+		self.lsPoint = []
+
 
 	def evCheckBox(self, cb):	
 		if cb == self.cbAutoCorrection:
 			return
-		self.getFusedImg()
+		self.plotFusedImg()
 	
 	def evSlider(self, sl):
-		self.getFusedImg()	
+		self.plotFusedImg()	
 
 
-	def getFusedImg(self):
+	def plotFusedImg(self):
 		disp = np.zeros(self.gray.shape)
 		
 		if self.cbHarris.isChecked():
@@ -161,18 +168,15 @@ class Window(QtGui.QDialog):
 
 
 	def eventFilter(self, obj, event):
-		if event.type() == QEvent.KeyPress and obj == self.listFile:
+		if event.type() == QEvent.KeyPress and obj == self.listPoint:
 			if event.key() == Qt.Key_Delete:
-				pass
-				# listItems=self.listFile.selectedItems()
-				# if not listItems: return        
-				# for item in listItems:
-					# self.listFile.takeItem(self.listFile.row(item))
-					# for mp4 in self.lsMp4:
-					# 	if mp4['name'] == item.text():
-					# 		self.lsMp4.remove(mp4)
-					# 		break
-				# self.plot()			
+				listItems=self.listPoint.selectedItems()
+				if not listItems: return        
+				for item in listItems:
+					idx = self.listPoint.row(item)
+					del self.lsPoint[idx]
+					self.listPoint.takeItem(idx)
+					
 			return super(Window, self).eventFilter(obj, event)
 		else:
 			return super(Window, self).eventFilter(obj, event)
@@ -187,7 +191,7 @@ class Window(QtGui.QDialog):
 		if len(event.mimeData().urls()) != 1:
 			return
 		self.file = unicode(event.mimeData().urls()[0].toLocalFile()) 
-		_, strExtension = os.path.splitext(file)
+		_, strExtension = os.path.splitext(self.file)
 
 		if strExtension.lower() == ".mp4":
 			cap = cv2.VideoCapture(self.file)
@@ -198,6 +202,9 @@ class Window(QtGui.QDialog):
 				if ret == True:
 					self.img = frame
 					self.gray = cv2.cvtColor(self.img,cv2.COLOR_BGR2GRAY)
+					self.imgHarris = self.GetCornersHarris(self.gray)
+					self.imgHough = self.GetLinesHough(self.gray)
+
 		elif strExtension.lower() == ".jpg":
 			pass
 		else:
@@ -207,6 +214,17 @@ class Window(QtGui.QDialog):
 		self.ax.imshow(self.img)
 		self.ax.set_xlabel(file)
 		self.canvas.draw()
+
+	def generate(self):
+		strFile, _ = os.path.splitext(self.file)
+		
+		with open(strFile + ".txt", "w") as file:
+			for p in self.lsPoint:
+				if p == 'None':
+					file.write("-\n")
+				else:
+					file.write("%d, %d\n" % (p[0],p[1]))
+
 
 	def plotRawImg(self):
 		self.ax.clear()
@@ -281,15 +299,20 @@ class Window(QtGui.QDialog):
 			idxMin = np.argmin(dist)
 			y, x = indices[:,idxMin]
 
-
 		self.ax.plot(x,y,'g.')
 		self.canvas.draw()
 		
 		if QtGui.QMessageBox.question(self,'', "Is it the corner?", 
 			QtGui.QMessageBox.Yes | QtGui.QMessageBox.No) == QtGui.QMessageBox.Yes:
-			pass
-
+			self.listPoint.addItem(str((x,y)))
+			self.lsPoint.append((x,y))
+		
 		# 	self.edt.appendPlainText(" ".join(str(x) for x in self.ls...))
+
+	def insertNone(self):
+		self.listPoint.addItem('None')
+		self.lsPoint.append('None')
+		
 
 	def getClickedPoint(self):
 		self.ax.set_xlim(self.ax.get_xlim()) 
@@ -303,25 +326,6 @@ class Window(QtGui.QDialog):
 		self.edt.appendPlainText(str((x,y)))
 		return x,y
 
-
-	def testInit(self):
-		self.file = 'mp4/test1_cam1.MP4'
-		cap = cv2.VideoCapture(self.file)
-		w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH ))
-		h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT ))
-		if cap.isOpened():
-			ret, frame = cap.read()
-			if ret == True:
-				self.img = frame
-				self.gray = cv2.cvtColor(self.img,cv2.COLOR_BGR2GRAY)
-				self.imgHarris = self.GetCornersHarris(self.gray)
-				self.imgHough = self.GetLinesHough(self.gray)
-				
-
-		self.ax.clear()
-		self.ax.imshow(self.img)
-		self.ax.set_xlabel(self.file)
-		self.canvas.draw()
 
 if __name__ == '__main__':
 	app = QtGui.QApplication(sys.argv)
