@@ -30,20 +30,14 @@ class Window(QtGui.QDialog):
 		self.canvas = FigureCanvas(self.figure)
 		self.toolbar = NavigationToolbar(self.canvas, self)
 
-		self.btnClick = QtGui.QPushButton('Click')
-		self.btnClick.setFixedWidth(100)
-		self.btnClick.clicked.connect(self.click)
-
 		self.btnRawImg = QtGui.QPushButton('Raw Image')
 		self.btnRawImg.setFixedWidth(100)
 		self.btnRawImg.clicked.connect(self.plotRawImg)
 
-		# self.btnGenerate = QtGui.QPushButton('Generate')
-		# self.btnGenerate.clicked.connect(self.generate)
-		
 		self.edt = QtGui.QPlainTextEdit()
 		self.edt.setDisabled(True)
 		self.edt.setMaximumBlockCount(10)
+		self.edt.setFixedWidth(100)
 		
 		# self.listFile = QtGui.QListWidget()
 		# self.listFile.installEventFilter(self)
@@ -88,6 +82,18 @@ class Window(QtGui.QDialog):
 		self.cbNonMaxSup = QtGui.QCheckBox("Non-Max-Sup")
 		self.cbNonMaxSup.stateChanged.connect(lambda:self.evCheckBox(self.cbNonMaxSup))
 
+		self.btnClick = QtGui.QPushButton('Click')
+		self.btnClick.setFixedWidth(100)
+		self.btnClick.clicked.connect(self.click)
+
+		self.cbAutoCorrection = QtGui.QCheckBox("Auto Correction")
+		self.cbAutoCorrection.stateChanged.connect(lambda:self.evCheckBox(self.cbAutoCorrection))
+
+
+		# self.btnGenerate = QtGui.QPushButton('Generate')
+		# self.btnGenerate.clicked.connect(self.generate)
+
+
 		layoutControl = QtGui.QGridLayout()
 		layoutControl.addWidget(self.btnRawImg,0,0,1,1)
 		layoutControl.addWidget(self.cbGray,1,0,1,1)
@@ -97,12 +103,14 @@ class Window(QtGui.QDialog):
 		layoutControl.addWidget(self.cbHough,5,0,1,1)
 		layoutControl.addWidget(self.slHough,6,0,1,1)
 		layoutControl.addWidget(self.cbNonMaxSup,7,0,1,1)
+		layoutControl.addWidget(self.btnClick,8,0,1,1)
+		layoutControl.addWidget(self.cbAutoCorrection,9,0,1,1)
 
 		layout = QtGui.QGridLayout()
 		layout.addWidget(self.toolbar,0,0,1,4)
 		layout.addWidget(self.canvas,1,1,4,3)
 		layout.addLayout(layoutControl,1,0,1,1)
-		
+		layout.addWidget(self.edt,2,0,1,1)
 
 		self.setLayout(layout)
 		self.ax = self.figure.add_subplot(111)
@@ -117,6 +125,8 @@ class Window(QtGui.QDialog):
 		self.testInit()
 
 	def evCheckBox(self, cb):	
+		if cb == self.cbAutoCorrection:
+			return
 		self.getFusedImg()
 	
 	def evSlider(self, sl):
@@ -124,24 +134,26 @@ class Window(QtGui.QDialog):
 
 
 	def getFusedImg(self):
-		ret = np.zeros(self.gray.shape)
+		disp = np.zeros(self.gray.shape)
 		
 		if self.cbHarris.isChecked():
-			ret = ret + float(self.slHarris.value())/10 * self.imgHarris
+			disp = disp + float(self.slHarris.value())/10 * self.imgHarris
 
 		if self.cbHough.isChecked():
-			ret = ret + float(self.slHough.value())/10 * self.imgHough
+			disp = disp + float(self.slHough.value())/10 * self.imgHough
 
 		if self.cbNonMaxSup.isChecked():
-			ret = self.GetNonMaxSup(ret)
+			disp = self.GetNonMaxSup(disp)
+
+		self.detected = disp
 
 		if self.cbGray.isChecked():
-			ret = ret + float(self.slGray.value())/10 * self.gray
+			disp = disp + float(self.slGray.value())/10 * self.gray
 
 		xlim = self.ax.get_xlim()
 		ylim = self.ax.get_ylim()
 		self.ax.clear()
-		self.ax.imshow(ret, cmap='gray', vmin = 0, vmax = 255)
+		self.ax.imshow(disp, cmap='gray', vmin = 0, vmax = 255)
 		self.ax.set_xlabel(self.file)
 		self.ax.set_xlim(xlim)
 		self.ax.set_ylim(ylim)
@@ -208,12 +220,7 @@ class Window(QtGui.QDialog):
 		gray = np.float32(gray)
 		dst = cv2.cornerHarris(gray,2,3,0.04)
 		dst = cv2.dilate(dst,None)
-		# ret[dst>0.01*dst.max()] = 1
 		ret[dst>0.001*dst.max()] = 255.0
-
-		# sobelx = cv2.Sobel(gray,cv2.CV_64F,1,0,ksize=5)
-		# sobely = cv2.Sobel(gray,cv2.CV_64F,0,1,ksize=5)
-		# return sobelx + sobely
 		
 		return ret
 
@@ -233,15 +240,15 @@ class Window(QtGui.QDialog):
 		        y1 = int(y0 + 3000*(a))
 		        x2 = int(x0 - 3000*(-b))
 		        y2 = int(y0 - 3000*(a))
-		        cv2.line(grayLine,(x1,y1),(x2,y2),1.0)
+		        cv2.line(grayLine,(x1,y1),(x2,y2),1.0, )
 		        ret = ret + grayLine
 		ret = ret/ret.max() * 255
 		return ret
 
 
 	def GetNonMaxSup(self, gray):
-		# ret = np.zeros(gray.shape)
 		ret = gray
+		gray = cv2.GaussianBlur(gray,(5,5),0)
 
 		lsShift = []
 		lsShift.append(np.pad(gray[:-1,:-1], ((1, 0), (1, 0)), 'constant'))
@@ -254,21 +261,35 @@ class Window(QtGui.QDialog):
 		lsShift.append(np.pad(gray[1:,1:], ((0, 1), (0, 1)), 'constant'))
 		grayMax = np.array(lsShift).max(axis=0)
 
-		ret[np.where(gray < grayMax)] = 0
+		ret[np.where(gray <= grayMax)] = 0
+		ret[np.where(ret > 0)] = 255
 
 		return ret
 
 	def click(self):
-		if self.bClick:
-			x,y = self.getClickedPoint()
-			self.ax.plot(x,y,'g.')
-			self.canvas.draw()
+		x,y = self.getClickedPoint()
+		if self.cbAutoCorrection.isChecked():
+			w = 10
+			y1 = max(y-w, 0)
+			y2 = min(y+w, self.detected.shape[0])
+			x1 = max(x-w, 0)
+			x2 = min(x+w, self.detected.shape[1])
+			fMax = np.max(self.detected[y1:y2, x1:x2])
+			indices = np.array(np.where(self.detected == fMax))
+			diff = indices - np.array([y,x])[:,None]
+			dist = diff[0]*diff[0] + diff[1]*diff[1]
+			idxMin = np.argmin(dist)
+			y, x = indices[:,idxMin]
 
-			if QtGui.QMessageBox.question(self,'', "Is it the corner?", 
-				QtGui.QMessageBox.Yes | QtGui.QMessageBox.No) == QtGui.QMessageBox.Yes:
-				pass
 
-			# 	self.edt.appendPlainText(" ".join(str(x) for x in self.ls...))
+		self.ax.plot(x,y,'g.')
+		self.canvas.draw()
+		
+		if QtGui.QMessageBox.question(self,'', "Is it the corner?", 
+			QtGui.QMessageBox.Yes | QtGui.QMessageBox.No) == QtGui.QMessageBox.Yes:
+			pass
+
+		# 	self.edt.appendPlainText(" ".join(str(x) for x in self.ls...))
 
 	def getClickedPoint(self):
 		self.ax.set_xlim(self.ax.get_xlim()) 
@@ -276,8 +297,12 @@ class Window(QtGui.QDialog):
 
 		self.edt.appendPlainText("Click point")
 		X = self.figure.ginput(1)[0]
-		self.edt.appendPlainText(str(X))
-		return X
+		x, y = X
+		x = int(round(x))
+		y = int(round(y))
+		self.edt.appendPlainText(str((x,y)))
+		return x,y
+
 
 	def testInit(self):
 		self.file = 'mp4/test1_cam1.MP4'
