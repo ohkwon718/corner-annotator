@@ -206,7 +206,11 @@ class Window(QtGui.QDialog):
 					self.imgHough = self.GetLinesHough(self.gray)
 
 		elif strExtension.lower() == ".jpg":
-			pass
+			self.img = cv2.cvtColor(cv2.imread(self.file), cv2.COLOR_BGR2RGB)
+			h, w, _ = self.img.shape
+			self.gray = cv2.cvtColor(self.img,cv2.COLOR_BGR2GRAY)
+			self.imgHarris = self.GetCornersHarris(self.gray)
+			self.imgHough = self.GetLinesHough(self.gray)
 		else:
 			return
 
