@@ -147,18 +147,63 @@ class Window(QtGui.QDialog):
 		
 		return ret
 
-	def GetLinesHough(self, gray, theta_range = (0,np.pi)):
+
+	def drawLine(self):
+		X1, X2 = self.getClickedBox()	
+		l = min(X1[0],X2[0])-2
+		r = max(X1[0],X2[0])+2
+		t = min(X1[1],X2[1])-2
+		b = max(X1[1],X2[1])+2
+
+		box = self.gray[ t:b, l:r ]
+		theta = -np.arctan2(X1[0]-X2[0], X1[1]-X2[1])
+		dist = np.sqrt((X1[0]-X2[0])**2 + (X1[1]-X2[1])**2)
+		self.imgHough[ t:b, l:r ] = self.imgHough[ t:b, l:r ] + self.GetLinesHough(box, theta_target=theta, theta_offset = 0.05)
+		self.plotFusedImg()	
+
+	def clearLines(self):
+		self.imgHough = np.zeros_like(self.gray)
+		self.plotFusedImg()	
+
+	def getClickedBox(self):
+		self.ax.set_xlim(self.ax.get_xlim()) 
+		self.ax.set_ylim(self.ax.get_ylim()) 
+
+		self.edt.appendPlainText("Click 2 points")
+		# X = self.figure.ginput(2)[0]
+		X1, X2 = self.figure.ginput(2)
+		X1 = (int(round(X1[0])),int(round(X1[1])))
+		X2 = (int(round(X2[0])),int(round(X2[1])))
+		return X1, X2
+
+
+	def GetLinesHough(self, gray, theta_target = None, theta_offset = 0.1, dist = 70):
 		ret = np.zeros(gray.shape)
 		edges = cv2.Canny(gray, 130, 200, apertureSize=3)
-		lines = cv2.HoughLines(edges,1,np.pi/720,70)
+		# edges = cv2.Canny(gray, 30, 100, apertureSize=3)
+		# edges = cv2.Canny(gray, 30, 80, apertureSize=3)
+		lines = cv2.HoughLines(edges,1,np.pi/720,int(dist))
 		
-
+		org = 0
+		if theta_target is None:
+			theta_range = (0, np.pi)
+		else:
+			if theta_target < 0:
+				theta_target += np.pi
+			theta_range = (theta_target - theta_offset, theta_target + theta_offset)
+			if theta_target < np.pi/2:
+				org = gray.shape[0]
+			
+		
+		
 		for line in lines:
 		    for rho,theta in line:
-		    	if np.abs(rho) > 3:
+		    	
+		    	if np.abs(rho - org) > 3:
 		    		continue
 		    	if theta < theta_range[0] or theta > theta_range[1]:
 		    		continue
+
 		    	grayLine = np.zeros(gray.shape)
 		        a = np.cos(theta)
 		        b = np.sin(theta)
@@ -194,27 +239,6 @@ class Window(QtGui.QDialog):
 		ret[np.where(ret > 0)] = 255
 
 		return ret
-
-	def drawLine(self):
-		X1, X2 = self.getClickedBox()	
-		box = self.gray[ X1[1]:X2[1], X1[0]:X2[0] ]
-		theta = -np.arctan2(X1[0]-X2[0], X1[1]-X2[1])
-		if theta < 0:
-			theta += np.pi
-		self.imgHough[ X1[1]:X2[1], X1[0]:X2[0] ] = self.imgHough[ X1[1]:X2[1], X1[0]:X2[0] ] + self.GetLinesHough(box, theta_range=(theta-0.05, theta+0.05))
-		self.plotFusedImg()	
-
-	def getClickedBox(self):
-		self.ax.set_xlim(self.ax.get_xlim()) 
-		self.ax.set_ylim(self.ax.get_ylim()) 
-
-		self.edt.appendPlainText("Click point")
-		# X = self.figure.ginput(2)[0]
-		X1, X2 = self.figure.ginput(2)
-		X1 = (int(round(X1[0])),int(round(X1[1])))
-		X2 = (int(round(X2[0])),int(round(X2[1])))
-		return X1, X2
-
 
 	def click(self):
 		x,y = self.getClickedPoint()
@@ -301,7 +325,7 @@ class Window(QtGui.QDialog):
 		self.btnDrawLine.setFixedWidth(100)
 		self.btnDrawLine.clicked.connect(self.drawLine)
 
-		self.btnClearLines = QtGui.QPushButton('Draw Lines')
+		self.btnClearLines = QtGui.QPushButton('Clear Lines')
 		self.btnClearLines.setFixedWidth(100)
 		self.btnClearLines.clicked.connect(self.clearLines)
 
@@ -309,7 +333,7 @@ class Window(QtGui.QDialog):
 		self.slHough = QtGui.QSlider(Qt.Horizontal)
 		self.slHough.setMinimum(0)
 		self.slHough.setMaximum(10)
-		self.slHough.setValue(0)
+		self.slHough.setValue(5)
 		self.slHough.setTickPosition(QtGui.QSlider.TicksBelow)
 		self.slHough.setTickInterval(1)
 		self.slHough.setFixedWidth(80)
@@ -326,7 +350,7 @@ class Window(QtGui.QDialog):
 		self.cbAutoCorrection.stateChanged.connect(lambda:self.evCheckBox(self.cbAutoCorrection))
 
 		self.btnGenerate = QtGui.QPushButton('Generate')
-		self.btnClick.setFixedWidth(100)
+		self.btnGenerate.setFixedWidth(100)
 		self.btnGenerate.clicked.connect(self.generate)
 
 		self.lbName = QtGui.QLabel("Name :")
@@ -340,7 +364,7 @@ class Window(QtGui.QDialog):
 
 		layoutControl = QtGui.QGridLayout()
 		lsControl = [self.btnRawImg, self.cbGray, self.slGray, self.slHarris,
-					self.btnDrawLine, self.slHough, self.cbNonMaxSup, 
+					self.btnDrawLine, self.btnClearLines, self.slHough, self.cbNonMaxSup, 
 					self.cbAutoCorrection, 
 					self.lbName, self.tbName, self.btnClick, self.btnTest]
 		gridW = 1
