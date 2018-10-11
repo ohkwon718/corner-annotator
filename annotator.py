@@ -150,15 +150,22 @@ class Window(QtGui.QDialog):
 
 	def drawLine(self):
 		X1, X2 = self.getClickedBox()	
-		l = min(X1[0],X2[0])-2
-		r = max(X1[0],X2[0])+2
-		t = min(X1[1],X2[1])-2
-		b = max(X1[1],X2[1])+2
 
-		box = self.gray[ t:b, l:r ]
-		theta = -np.arctan2(X1[0]-X2[0], X1[1]-X2[1])
-		dist = np.sqrt((X1[0]-X2[0])**2 + (X1[1]-X2[1])**2)
-		self.imgHough[ t:b, l:r ] = self.imgHough[ t:b, l:r ] + self.GetLinesHough(box, theta_target=theta, theta_offset = 0.05)
+		if self.cbHough.isChecked():
+			l = min(X1[0],X2[0])-2
+			r = max(X1[0],X2[0])+2
+			t = min(X1[1],X2[1])-2
+			b = max(X1[1],X2[1])+2
+
+			box = self.gray[ t:b, l:r ]
+			theta = -np.arctan2(X1[0]-X2[0], X1[1]-X2[1])
+			dist = np.sqrt((X1[0]-X2[0])**2 + (X1[1]-X2[1])**2)
+			self.imgHough[ t:b, l:r ] = self.imgHough[ t:b, l:r ] + self.GetLinesHough(box, dist = dist, theta_target=theta, theta_offset = 0.01)
+		else:
+			grayLine = np.zeros_like(self.imgHough)
+			cv2.line(grayLine,X1,X2,100.0, )
+			self.imgHough = self.imgHough + grayLine
+		
 		self.plotFusedImg()	
 
 	def clearLines(self):
@@ -182,6 +189,7 @@ class Window(QtGui.QDialog):
 		edges = cv2.Canny(gray, 130, 200, apertureSize=3)
 		# edges = cv2.Canny(gray, 30, 100, apertureSize=3)
 		# edges = cv2.Canny(gray, 30, 80, apertureSize=3)
+		dist = int(min(dist,70))
 		lines = cv2.HoughLines(edges,1,np.pi/720,int(dist))
 		
 		org = 0
@@ -222,7 +230,7 @@ class Window(QtGui.QDialog):
 
 	def GetNonMaxSup(self, gray):
 		ret = gray
-		gray = cv2.GaussianBlur(gray,(5,5),0)
+		gray = cv2.GaussianBlur(gray,(7,7),0)
 
 		lsShift = []
 		lsShift.append(np.pad(gray[:-1,:-1], ((1, 0), (1, 0)), 'constant'))
@@ -260,7 +268,7 @@ class Window(QtGui.QDialog):
 		
 		if QtGui.QMessageBox.question(self,'', "Is it the corner?", 
 			QtGui.QMessageBox.Yes | QtGui.QMessageBox.No) == QtGui.QMessageBox.Yes:
-			self.listPoint.addItem(str((x,y)))
+			self.listPoint.addItem(self.tbName.text() + str((x,y)))
 			self.lsPoint.append((x,y))
 			self.lsName.append(self.tbName.text())
 		
@@ -321,6 +329,8 @@ class Window(QtGui.QDialog):
 		self.slHarris.setFixedWidth(80)
 		self.slHarris.valueChanged.connect(lambda:self.evSlider(self.slHarris))
 
+		self.cbHough = QtGui.QCheckBox("Use Hough")
+
 		self.btnDrawLine = QtGui.QPushButton('Draw Line')
 		self.btnDrawLine.setFixedWidth(100)
 		self.btnDrawLine.clicked.connect(self.drawLine)
@@ -363,7 +373,7 @@ class Window(QtGui.QDialog):
 		self.btnTest.clicked.connect(self.test)
 
 		layoutControl = QtGui.QGridLayout()
-		lsControl = [self.btnRawImg, self.cbGray, self.slGray, self.slHarris,
+		lsControl = [self.btnRawImg, self.cbGray, self.slGray, self.slHarris, self.cbHough,
 					self.btnDrawLine, self.btnClearLines, self.slHough, self.cbNonMaxSup, 
 					self.cbAutoCorrection, 
 					self.lbName, self.tbName, self.btnClick, self.btnTest]
