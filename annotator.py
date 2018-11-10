@@ -94,10 +94,11 @@ class Window(QtGui.QDialog):
 	def dropEvent(self, event):
 		if len(event.mimeData().urls()) != 1:
 			return
-		self.file = unicode(event.mimeData().urls()[0].toLocalFile()) 
-		strFile, strExtension = os.path.splitext(self.file)
+		file = unicode(event.mimeData().urls()[0].toLocalFile()) 
+		strFile, strExtension = os.path.splitext(file)
 
 		if strExtension.lower() == ".mp4":
+			self.file = file
 			cap = cv2.VideoCapture(self.file)
 			w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH ))
 			h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT ))
@@ -106,11 +107,19 @@ class Window(QtGui.QDialog):
 				if ret == True:
 					cv2.imwrite(strFile + ".jpg", frame)
 					self.img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
 		elif strExtension.lower() == ".jpg":
+			self.file = file
 			self.img = cv2.cvtColor(cv2.imread(self.file), cv2.COLOR_BGR2RGB)
 			h, w, _ = self.img.shape
-		
+		elif strExtension.lower() == ".txt":
+			with open(file) as f:
+				for l in f:
+					l2d_split = l.split(' ')
+					name = l2d_split[0]
+					x,y = int(l2d_split[1]), int(l2d_split[2])
+					self.listPoint.addItem(name + str((x,y)))
+					self.lsPoint.append((x,y))
+					self.lsName.append(name)
 		else:
 			return
 		
@@ -129,6 +138,12 @@ class Window(QtGui.QDialog):
 		with open(strFile + ".txt", "w") as file:
 			for n, p in zip(self.lsName, self.lsPoint):
 				file.write(n + " %d %d\n" % (p[0],p[1]))
+
+		img_new = self.img
+		for n, p in zip(self.lsName, self.lsPoint):
+			cv2.circle(img_new, center = p, radius = 3, color = (255,128,128), thickness = 2)
+			cv2.putText(img_new, n, (p[0]-20, p[1]+20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 128, 128))
+		cv2.imwrite(strFile + "_result.jpg", cv2.cvtColor(img_new, cv2.COLOR_BGR2RGB))
 
 
 	def plotRawImg(self):

@@ -7,9 +7,3 @@ How to use it?
 4. By checking "Auto Correction" checkbox, You can use auto-correction function which automatically choose the maximum value of feature image, you set before with the checkboxs and sliders, around the point you click. The feature image excludes the gray image even you set to visualize it. If you don't want to use the function and click a point manually, just uncheck the "Auto Correction" checkbox.
 5. If you want to insert a "Unknown" point which is required for your format, you can click the "Insert None" button.
 6. A result example is like below. '-' means the "None" point you cannot.
-
-484, 305
-823, 479
--
-913, 295
-
