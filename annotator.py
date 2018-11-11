@@ -142,7 +142,7 @@ class Window(QtGui.QDialog):
 		img_new = self.img
 		for n, p in zip(self.lsName, self.lsPoint):
 			cv2.circle(img_new, center = p, radius = 3, color = (255,128,128), thickness = 2)
-			cv2.putText(img_new, n, (p[0]-20, p[1]+20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 128, 128))
+			cv2.putText(img_new, str(n), (p[0]-20, p[1]+20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 128, 128))
 		cv2.imwrite(strFile + "_result.jpg", cv2.cvtColor(img_new, cv2.COLOR_BGR2RGB))
 
 
@@ -175,7 +175,7 @@ class Window(QtGui.QDialog):
 			box = self.gray[ t:b, l:r ]
 			theta = -np.arctan2(X1[0]-X2[0], X1[1]-X2[1])
 			dist = np.sqrt((X1[0]-X2[0])**2 + (X1[1]-X2[1])**2)
-			self.imgHough[ t:b, l:r ] = self.imgHough[ t:b, l:r ] + self.GetLinesHough(box, dist = dist, theta_target=theta, theta_offset = 0.01)
+			self.imgHough[ t:b, l:r ] = self.imgHough[ t:b, l:r ] + self.GetLinesHough(box, dist = dist, theta_target=theta, theta_offset = 0.02)
 		else:
 			grayLine = np.zeros_like(self.imgHough)
 			cv2.line(grayLine,X1,X2,100.0, )
@@ -201,10 +201,10 @@ class Window(QtGui.QDialog):
 
 	def GetLinesHough(self, gray, theta_target = None, theta_offset = 0.1, dist = 70):
 		ret = np.zeros(gray.shape)
-		edges = cv2.Canny(gray, 130, 200, apertureSize=3)
+		# edges = cv2.Canny(gray, 130, 200, apertureSize=3)
 		# edges = cv2.Canny(gray, 30, 100, apertureSize=3)
-		# edges = cv2.Canny(gray, 30, 80, apertureSize=3)
-		dist = int(min(dist,70))
+		edges = cv2.Canny(gray, 30, 80, apertureSize=3)
+		dist = int(max(min(dist - 30 ,70),10))
 		lines = cv2.HoughLines(edges,1,np.pi/720,int(dist))
 		
 		org = 0
@@ -213,31 +213,35 @@ class Window(QtGui.QDialog):
 		else:
 			if theta_target < 0:
 				theta_target += np.pi
-			theta_range = (theta_target - theta_offset, theta_target + theta_offset)
-			if theta_target < np.pi/2:
-				org = gray.shape[0]
 			
-		
-		
+		print "-----------"
 		for line in lines:
 		    for rho,theta in line:
-		    	
-		    	if np.abs(rho - org) > 3:
-		    		continue
-		    	if theta < theta_range[0] or theta > theta_range[1]:
-		    		continue
+				theta_diff = theta_target - theta
+				if theta_diff < -np.pi/2:
+					theta_diff += np.pi
+				if theta_diff > np.pi/2:
+					theta_diff -= np.pi
 
-		    	grayLine = np.zeros(gray.shape)
-		        a = np.cos(theta)
-		        b = np.sin(theta)
-		        x0 = a*rho
-		        y0 = b*rho
-		        x1 = int(x0 + 3000*(-b))
-		        y1 = int(y0 + 3000*(a))
-		        x2 = int(x0 - 3000*(-b))
-		        y2 = int(y0 - 3000*(a))
-		        cv2.line(grayLine,(x1,y1),(x2,y2),1.0, )
-		        ret = ret + grayLine
+				print rho, gray.shape[0], gray.shape[1], theta, theta_target, theta_diff
+
+				if np.abs(theta_diff) > theta_offset:
+					continue
+
+				if min( np.abs(rho), np.abs(rho-min(gray.shape[0],gray.shape[1]) ) ) > 3:
+					continue
+
+				grayLine = np.zeros(gray.shape)
+				a = np.cos(theta)
+				b = np.sin(theta)
+				x0 = a*rho
+				y0 = b*rho
+				x1 = int(x0 + 3000*(-b))
+				y1 = int(y0 + 3000*(a))
+				x2 = int(x0 - 3000*(-b))
+				y2 = int(y0 - 3000*(a))
+				cv2.line(grayLine,(x1,y1),(x2,y2),1.0)
+				ret = ret + grayLine
 		# ret = ret/ret.max() * 255
 		ret = ret * 100
 		return ret
@@ -345,6 +349,7 @@ class Window(QtGui.QDialog):
 		self.slHarris.valueChanged.connect(lambda:self.evSlider(self.slHarris))
 
 		self.cbHough = QtGui.QCheckBox("Use Hough")
+		self.cbHough.setChecked(True)
 
 		self.btnDrawLine = QtGui.QPushButton('Draw Line')
 		self.btnDrawLine.setFixedWidth(100)
