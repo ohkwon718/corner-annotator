@@ -32,41 +32,36 @@ class Window(QtGui.QDialog):
 		self.imgHough = False
 
 		self.lsPoint = []
-		self.lsName = []
-
-
-	def evCheckBox(self, cb):	
-		if cb == self.cbAutoCorrection:
-			return
-		self.plotFusedImg()
-	
-	def evSlider(self, sl):
-		self.plotFusedImg()	
-
+		self.lsName = []		
 
 	def plotFusedImg(self):
-		disp = np.zeros_like(self.gray)
-
-		disp = disp + float(self.slHarris.value())/10 * self.imgHarris
-		disp = disp + float(self.slHough.value())/10 * self.imgHough
-
-		if self.cbNonMaxSup.isChecked():
-			disp = self.GetNonMaxSup(disp)
-
-		self.detected = disp
-
-		if self.cbGray.isChecked():
-			disp = disp + float(self.slGray.value())/10 * self.gray
-
-
-		# disp = cv2.Canny(self.gray, 0, 200, apertureSize=3)
 		xlim = self.ax.get_xlim()
 		ylim = self.ax.get_ylim()
 		self.ax.clear()
-		self.ax.imshow(disp, cmap='gray', vmin = 0, vmax = 255)
+		
+		if self.rbRGB.isChecked():
+			self.ax.imshow(self.img)
+
+		else:
+			disp = np.zeros_like(self.gray)
+			disp = disp + float(self.slHarris.value())/10 * self.imgHarris
+			disp = disp + float(self.slHough.value())/10 * self.imgHough
+			if self.cbNonMaxSup.isChecked():
+				disp = self.GetNonMaxSup(disp)
+
+			self.detected = disp
+			if self.rbGray.isChecked():
+				disp = disp + float(self.slGray.value())/10 * self.gray
+			self.ax.imshow(disp, cmap='gray', vmin = 0, vmax = 255)
+
 		self.ax.set_xlabel(self.file)
 		self.ax.set_xlim(xlim)
 		self.ax.set_ylim(ylim)
+
+		if self.cbPlotPts.isChecked():
+			for x,y in self.lsPoint:
+				self.ax.plot(x,y,'g.')
+
 		self.canvas.draw()
 
 
@@ -107,7 +102,7 @@ class Window(QtGui.QDialog):
 				if ret == True:
 					cv2.imwrite(strFile + ".jpg", frame)
 					self.img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-		elif strExtension.lower() == ".jpg":
+		elif strExtension.lower() == ".jpg" or strExtension.lower() == ".png":
 			self.file = file
 			self.img = cv2.cvtColor(cv2.imread(self.file), cv2.COLOR_BGR2RGB)
 			h, w, _ = self.img.shape
@@ -144,13 +139,6 @@ class Window(QtGui.QDialog):
 			cv2.circle(img_new, center = p, radius = 3, color = (255,128,128), thickness = 2)
 			cv2.putText(img_new, str(n), (p[0]-20, p[1]+20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 128, 128))
 		cv2.imwrite(strFile + "_result.jpg", cv2.cvtColor(img_new, cv2.COLOR_BGR2RGB))
-
-
-	def plotRawImg(self):
-		self.ax.clear()
-		self.ax.imshow(self.img)
-		self.ax.set_xlabel(file)
-		self.canvas.draw()
 
 
 	def GetCornersHarris(self, gray):
@@ -201,8 +189,6 @@ class Window(QtGui.QDialog):
 
 	def GetLinesHough(self, gray, theta_target = None, theta_offset = 0.1, dist = 70):
 		ret = np.zeros(gray.shape)
-		# edges = cv2.Canny(gray, 130, 200, apertureSize=3)
-		# edges = cv2.Canny(gray, 30, 100, apertureSize=3)
 		edges = cv2.Canny(gray, 30, 80, apertureSize=3)
 		dist = int(max(min(dist - 30 ,70),10))
 		lines = cv2.HoughLines(edges,1,np.pi/720,int(dist))
@@ -282,15 +268,14 @@ class Window(QtGui.QDialog):
 			idxMin = np.argmin(dist)
 			y, x = indices[:,idxMin]
 
-		self.ax.plot(x,y,'g.')
-		self.canvas.draw()
+		# self.ax.plot(x,y,'g.')
+		# self.canvas.draw()
 		
-		if QtGui.QMessageBox.question(self,'', "Is it the corner?", 
-			QtGui.QMessageBox.Yes | QtGui.QMessageBox.No) == QtGui.QMessageBox.Yes:
-			self.listPoint.addItem(self.tbName.text() + str((x,y)))
-			self.lsPoint.append((x,y))
-			self.lsName.append(self.tbName.text())
-		
+		self.listPoint.addItem(self.tbName.text() + str((x,y)))
+		self.lsPoint.append((x,y))
+		self.lsName.append(self.tbName.text())
+		self.plotFusedImg()
+
 		# 	self.edt.appendPlainText(" ".join(str(x) for x in self.ls...))
 
 	def test(self):
@@ -313,10 +298,6 @@ class Window(QtGui.QDialog):
 		self.canvas = FigureCanvas(self.figure)
 		self.toolbar = NavigationToolbar(self.canvas, self)
 
-		self.btnRawImg = QtGui.QPushButton('Raw Image')
-		self.btnRawImg.setFixedWidth(100)
-		self.btnRawImg.clicked.connect(self.plotRawImg)
-
 		self.listPoint = QtGui.QListWidget()
 		self.listPoint.installEventFilter(self)
 		self.listPoint.setFixedWidth(120)
@@ -326,9 +307,13 @@ class Window(QtGui.QDialog):
 		self.edt.setMaximumBlockCount(10)
 		self.edt.setFixedWidth(120)
 		
-		self.cbGray = QtGui.QCheckBox("Gray")
-		self.cbGray.stateChanged.connect(lambda:self.evCheckBox(self.cbGray))
-		
+		self.rbRGB = QtGui.QRadioButton("RGB")
+		self.rbRGB.toggled.connect(self.plotFusedImg)
+		self.rbRGB.setChecked(True)
+		self.rbGray = QtGui.QRadioButton("Gray")
+		self.rbGray.toggled.connect(self.plotFusedImg)
+		self.rbNone = QtGui.QRadioButton("None")
+		self.rbNone.toggled.connect(self.plotFusedImg)
 
 		self.slGray = QtGui.QSlider(Qt.Horizontal)
 		self.slGray.setMinimum(0)
@@ -337,7 +322,7 @@ class Window(QtGui.QDialog):
 		self.slGray.setTickPosition(QtGui.QSlider.TicksBelow)
 		self.slGray.setTickInterval(1)
 		self.slGray.setFixedWidth(80)
-		self.slGray.valueChanged.connect(lambda:self.evSlider(self.slGray))
+		self.slGray.valueChanged.connect(self.plotFusedImg)
 
 		self.slHarris = QtGui.QSlider(Qt.Horizontal)
 		self.slHarris.setMinimum(0)
@@ -346,7 +331,7 @@ class Window(QtGui.QDialog):
 		self.slHarris.setTickPosition(QtGui.QSlider.TicksBelow)
 		self.slHarris.setTickInterval(1)
 		self.slHarris.setFixedWidth(80)
-		self.slHarris.valueChanged.connect(lambda:self.evSlider(self.slHarris))
+		self.slHarris.valueChanged.connect(self.plotFusedImg)
 
 		self.cbHough = QtGui.QCheckBox("Use Hough")
 		self.cbHough.setChecked(True)
@@ -367,18 +352,16 @@ class Window(QtGui.QDialog):
 		self.slHough.setTickPosition(QtGui.QSlider.TicksBelow)
 		self.slHough.setTickInterval(1)
 		self.slHough.setFixedWidth(80)
-		self.slHough.valueChanged.connect(lambda:self.evSlider(self.slHough))
+		self.slHough.valueChanged.connect(self.plotFusedImg)
 
 		self.cbNonMaxSup = QtGui.QCheckBox("Non-Max-Sup")
-		self.cbNonMaxSup.stateChanged.connect(lambda:self.evCheckBox(self.cbNonMaxSup))
+		self.cbNonMaxSup.stateChanged.connect(self.plotFusedImg)
 
 		self.btnClick = QtGui.QPushButton('Click')
 		self.btnClick.setFixedWidth(100)
 		self.btnClick.clicked.connect(self.click)
 
-		self.cbAutoCorrection = QtGui.QCheckBox("Auto Correction")
-		self.cbAutoCorrection.stateChanged.connect(lambda:self.evCheckBox(self.cbAutoCorrection))
-
+		
 		self.btnGenerate = QtGui.QPushButton('Generate')
 		self.btnGenerate.setFixedWidth(100)
 		self.btnGenerate.clicked.connect(self.generate)
@@ -388,15 +371,19 @@ class Window(QtGui.QDialog):
 		self.tbName = QtGui.QLineEdit("")
 		self.tbName.setFixedWidth(100)
 		
-		self.btnTest = QtGui.QPushButton('Test')
-		self.btnTest.setFixedWidth(100)
-		self.btnTest.clicked.connect(self.test)
+		self.cbPlotPts = QtGui.QCheckBox("Plot Points")
+		self.cbPlotPts.setChecked(True)
+		self.cbPlotPts.stateChanged.connect(self.plotFusedImg)
 
+		self.cbAutoCorrection = QtGui.QCheckBox("Auto Correction")
+		
+
+		
 		layoutControl = QtGui.QGridLayout()
-		lsControl = [self.btnRawImg, self.cbGray, self.slGray, self.slHarris, self.cbHough,
+		lsControl = [self.rbRGB, self.rbGray, self.rbNone, self.slGray, self.slHarris, self.cbHough,
 					self.btnDrawLine, self.btnClearLines, self.slHough, self.cbNonMaxSup, 
 					self.cbAutoCorrection, 
-					self.lbName, self.tbName, self.btnClick, self.btnTest]
+					self.lbName, self.tbName, self.btnClick, self.cbPlotPts]
 		gridW = 1
 		for i in range(len(lsControl)):
 			if isinstance(lsControl[i], list):
